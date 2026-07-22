@@ -275,7 +275,7 @@ const MODES = [
     // Horizontal lemniscate of Gerono: figure-eight (∞)
     fn: (p) => {
       const t = p * TAU;
-      return { x: 0.5 + 0.46 * Math.sin(t), y: 0.5 + 0.30 * Math.sin(t) * Math.cos(t), scale: 1 };
+      return { x: 0.5 + 0.50 * Math.sin(t), y: 0.5 + 0.50 * Math.sin(t) * Math.cos(t), scale: 1 };
     },
     period: 11,
   },
@@ -284,7 +284,7 @@ const MODES = [
     // Vertical figure-eight: axes swapped so the loops stack vertically (8)
     fn: (p) => {
       const t = p * TAU;
-      return { x: 0.5 + 0.30 * Math.sin(t) * Math.cos(t), y: 0.5 + 0.46 * Math.sin(t), scale: 1 };
+      return { x: 0.5 + 0.40 * Math.sin(t) * Math.cos(t), y: 0.5 + 0.50 * Math.sin(t), scale: 1 };
     },
     period: 11,
   },
