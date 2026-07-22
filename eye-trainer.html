@@ -293,7 +293,7 @@ const MODES = [
         ctx.sacX = 0.1 + Math.random() * 0.8;
         ctx.sacY = 0.15 + Math.random() * 0.7;
       }
-      return { x: ctx.sacX, y: ctx.sacY, scale: 1, snap: true };
+      return { x: ctx.sacX, y: ctx.sacY, scale: 1, smooth: true };
     },
     period: 12,
   },
@@ -323,6 +323,7 @@ const state = {
   ctx: {},             // scratch for modes (saccades)
   // smoothed screen position for saccade easing
   curX: 0.5, curY: 0.5, curScale: 1,
+  dirty: true,         // force a repaint even while paused (UI/layout changed)
 };
 
 const canvas = document.getElementById("c");
@@ -331,12 +332,16 @@ let W = 0, H = 0, DPR = 1;
 
 // Cached theme colors: reading getComputedStyle every frame forces a style
 // recalc 60x/s, so we resolve the CSS variables once and refresh on theme change.
-const colors = { dot: "", glow: "", bg: "" };
+const colors = { dot: "", glow: "", glowFade: "", bg: "" };
 function refreshColors() {
   const style = getComputedStyle(document.documentElement);
   colors.dot = style.getPropertyValue("--dot").trim();
   colors.glow = style.getPropertyValue("--dot-glow").trim();
   colors.bg = style.getPropertyValue("--bg").trim();
+  // Fully transparent variant of the glow colour. Fading a gradient to the
+  // keyword "transparent" interpolates through transparent-black and leaves a
+  // dark halo in some browsers, so we fade to the same RGB at zero alpha instead.
+  colors.glowFade = colors.glow.replace(/[\d.]+\s*\)\s*$/, "0)");
 }
 
 function resize() {
@@ -348,6 +353,7 @@ function resize() {
   canvas.style.width = W + "px";
   canvas.style.height = H + "px";
   g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  state.dirty = true; // resizing clears the canvas, so a repaint is needed
 }
 window.addEventListener("resize", resize);
 resize();
@@ -374,7 +380,17 @@ const flash = el("flash"), blinkText = el("blinkText");
 // ---- Settings persistence (localStorage) ----
 const SETTINGS_KEY = "eye-trainer-settings";
 
+let saveTimer = 0;
+
+// Debounced: slider `input` events fire rapidly, so batch writes instead of
+// serializing to localStorage on every pixel of a drag.
 function saveSettings() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(writeSettings, 300);
+}
+
+function writeSettings() {
+  clearTimeout(saveTimer);
   // Persist only user-configurable settings, not transient runtime state
   const data = {
     modeIdx: state.modeIdx,
@@ -392,6 +408,12 @@ function saveSettings() {
     // Storage may be unavailable (private mode, disabled); ignore silently
   }
 }
+
+// Flush any pending write before the page goes away so nothing is lost.
+window.addEventListener("pagehide", writeSettings);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") writeSettings();
+});
 
 function loadSettings() {
   let data;
@@ -423,6 +445,7 @@ function loadSettings() {
 function toggleTheme() {
   document.documentElement.classList.toggle("light");
   refreshColors();
+  state.dirty = true;
   saveSettings();
 }
 
@@ -443,11 +466,12 @@ function setMode(i) {
   state.phase = 0;
   state.autoTimer = 0;
   state.ctx = {};
+  state.dirty = true;
   refreshUI();
 }
 
 speedInput.oninput = () => { state.speed = parseFloat(speedInput.value); refreshUI(); };
-sizeInput.oninput = () => { state.baseSize = parseInt(sizeInput.value); refreshUI(); };
+sizeInput.oninput = () => { state.baseSize = parseInt(sizeInput.value); state.dirty = true; refreshUI(); };
 autoInput.oninput = () => { state.autoSec = parseInt(autoInput.value); state.autoTimer = 0; refreshUI(); };
 playBtn.onclick = () => { state.playing = !state.playing; refreshUI(); };
 themeBtn.onclick = toggleTheme;
@@ -455,6 +479,9 @@ blinkBtn.onclick = () => { state.blink = !state.blink; refreshUI(); };
 
 // ---- Keyboard ----
 window.addEventListener("keydown", (e) => {
+  // Let a focused range slider handle its own arrow keys instead of also
+  // firing the global mode/speed shortcuts.
+  if (e.target instanceof HTMLInputElement) return;
   switch (e.code) {
     case "Space": e.preventDefault(); state.playing = !state.playing; refreshUI(); break;
     case "ArrowRight": setMode(state.modeIdx + 1); break;
@@ -507,10 +534,11 @@ function frame(ts) {
   }
 
   const raw = mode.fn(state.phase, state.ctx);
+  const prevX = state.curX, prevY = state.curY, prevScale = state.curScale;
 
   // Only the discrete saccade jumps need easing; continuous paths are already
   // smooth, so we set them directly to avoid amplitude loss and lag (e.g. Zoom).
-  if (raw.snap) {
+  if (raw.smooth) {
     // Frame-rate independent easing: a 0.28 factor tuned for 60 fps is remapped
     // through dt so the feel is identical on 60 Hz and 120 Hz displays.
     const k = 1 - Math.pow(1 - 0.28, dt * 60);
@@ -523,7 +551,17 @@ function frame(ts) {
     state.curScale = raw.scale;
   }
 
-  draw(state.curX, state.curY, state.curScale);
+  // While paused, repaint only if something actually changed: either the dot is
+  // still easing into place, or a UI/layout change set the dirty flag.
+  const EPS = 1e-4;
+  const moved = Math.abs(state.curX - prevX) > EPS ||
+                Math.abs(state.curY - prevY) > EPS ||
+                Math.abs(state.curScale - prevScale) > EPS;
+
+  if (state.playing || moved || state.dirty) {
+    draw(state.curX, state.curY, state.curScale);
+    state.dirty = false;
+  }
   requestAnimationFrame(frame);
 }
 
@@ -538,7 +576,7 @@ function draw(nx, ny, scale) {
   // Glow
   const grad = g.createRadialGradient(x, y, 0, x, y, r * 2.6);
   grad.addColorStop(0, colors.glow);
-  grad.addColorStop(1, "transparent");
+  grad.addColorStop(1, colors.glowFade);
   g.fillStyle = grad;
   g.beginPath();
   g.arc(x, y, r * 2.6, 0, TAU);
@@ -597,14 +635,22 @@ panelHeader.addEventListener("pointerup", (e) => {
 // Hide button
 el("hideBtn").onclick = () => { panel.classList.add("hidden"); tip.classList.add("hidden"); };
 
-// Tap anywhere to toggle panel (useful on touch/fullscreen)
+// Tap anywhere to toggle panel (useful on touch/fullscreen). Delayed so a
+// double-click (fullscreen) doesn't toggle the panel twice on the way through.
+let clickTimer = 0;
 canvas.addEventListener("click", () => {
-  panel.classList.toggle("hidden");
-  tip.classList.add("hidden");
+  clearTimeout(clickTimer);
+  clickTimer = setTimeout(() => {
+    panel.classList.toggle("hidden");
+    tip.classList.add("hidden");
+  }, 250);
 });
 
 // Double-click anywhere to toggle fullscreen
-canvas.addEventListener("dblclick", toggleFullscreen);
+canvas.addEventListener("dblclick", () => {
+  clearTimeout(clickTimer);
+  toggleFullscreen();
+});
 
 // Keep the panel inside the viewport when the window is resized. Registered here
 // (not inside resize()) because `panel` is defined after the initial resize call.
