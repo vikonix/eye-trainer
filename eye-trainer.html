@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eye Trainer</title>
 <style>
   :root {
@@ -180,6 +180,12 @@
     0%, 100% { opacity: 0; }
     30%, 70% { opacity: 0.8; }
   }
+
+  /* Respect reduced-motion: drop the full-screen colour pulse (the jarring part)
+     but keep the text reminder so the blink prompt still works. */
+  @media (prefers-reduced-motion: reduce) {
+    .blink-flash.show { animation: none; }
+  }
 </style>
 </head>
 <body>
@@ -195,17 +201,17 @@
   </div>
 
   <div class="row">
-    <label>Speed <span id="speedVal">1.0×</span></label>
+    <label for="speed">Speed <span id="speedVal">1.0×</span></label>
     <input type="range" id="speed" min="0.3" max="3" step="0.1" value="1">
   </div>
 
   <div class="row">
-    <label>Dot size <span id="sizeVal">26 px</span></label>
+    <label for="size">Dot size <span id="sizeVal">26 px</span></label>
     <input type="range" id="size" min="10" max="60" step="1" value="26">
   </div>
 
   <div class="row">
-    <label>Auto-switch mode <span id="autoVal">off</span></label>
+    <label for="auto">Auto-switch mode <span id="autoVal">off</span></label>
     <input type="range" id="auto" min="0" max="60" step="5" value="0">
   </div>
 
@@ -245,7 +251,7 @@ const MODES = [
   },
   {
     key: "Diagonals",
-    // Two diagonals from the bottom corners, meeting at the top-center
+    // Two diagonals between the top-center and the two bottom corners (a V shape)
     fn: (p) => {
       const s = Math.sin(p * TAU);
       return { x: 0.5 + 0.5 * s, y: Math.abs(s), scale: 1 };
@@ -446,7 +452,7 @@ function toggleTheme() {
   document.documentElement.classList.toggle("light");
   refreshColors();
   state.dirty = true;
-  saveSettings();
+  refreshUI(); // updates the theme button label and persists the change
 }
 
 function refreshUI() {
@@ -458,6 +464,7 @@ function refreshUI() {
   playBtn.textContent = state.playing ? "⏸ Pause" : "▶ Play";
   playBtn.classList.toggle("on", state.playing);
   blinkBtn.classList.toggle("on", state.blink);
+  themeBtn.textContent = document.documentElement.classList.contains("light") ? "☀ Theme" : "🌙 Theme";
   saveSettings();
 }
 
@@ -475,7 +482,7 @@ sizeInput.oninput = () => { state.baseSize = parseInt(sizeInput.value); state.di
 autoInput.oninput = () => { state.autoSec = parseInt(autoInput.value); state.autoTimer = 0; refreshUI(); };
 playBtn.onclick = () => { state.playing = !state.playing; refreshUI(); };
 themeBtn.onclick = toggleTheme;
-blinkBtn.onclick = () => { state.blink = !state.blink; refreshUI(); };
+blinkBtn.onclick = () => { state.blink = !state.blink; state.blinkTimer = 0; refreshUI(); };
 
 // ---- Keyboard ----
 window.addEventListener("keydown", (e) => {
@@ -568,7 +575,9 @@ function frame(ts) {
 function draw(nx, ny, scale) {
   g.clearRect(0, 0, W, H);
 
-  const margin = state.baseSize; // one radius: the dot reaches the edge without clipping
+  // Keep the dot one base-radius away from the edges so it never clips. Modes
+  // that scale up (Zoom) stay centred, so they don't clip despite the larger radius.
+  const margin = state.baseSize;
   const x = margin + nx * (W - margin * 2);
   const y = margin + ny * (H - margin * 2);
   const r = state.baseSize * scale;

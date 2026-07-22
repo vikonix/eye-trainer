@@ -9,7 +9,7 @@ Open `eye-trainer.html` in any modern browser. No build step, no dependencies, n
 ## Modes
 
 - **Horizontal** / **Vertical** - straight left-right and up-down sweeps.
-- **Diagonals** - two diagonals from the bottom corners meeting at the top-center.
+- **Diagonals** - two diagonals between the top-center and the bottom corners (a V shape).
 - **Circle CW** / **Circle CCW** - clockwise and counter-clockwise loops.
 - **Figure-8 H** / **Figure-8 V** - horizontal and vertical figure-eight paths.
 - **Saccades** - jumps between random points to train quick eye movements.
