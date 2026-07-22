@@ -375,6 +375,7 @@ MODES.forEach((m, i) => {
 const modeBtns = () => Array.from(modesEl.children);
 
 const el = (id) => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 const modeNameEl = el("modeName");
 const speedInput = el("speed"), speedVal = el("speedVal");
 const sizeInput = el("size"), sizeVal = el("sizeVal");
@@ -433,9 +434,11 @@ function loadSettings() {
   if (Number.isInteger(data.modeIdx) && data.modeIdx >= 0 && data.modeIdx < MODES.length) {
     state.modeIdx = data.modeIdx;
   }
-  if (typeof data.speed === "number") state.speed = data.speed;
-  if (typeof data.baseSize === "number") state.baseSize = data.baseSize;
-  if (typeof data.autoSec === "number") state.autoSec = data.autoSec;
+  // Clamp to the control ranges so corrupted or outdated storage can't push the
+  // state out of bounds and desync it from the sliders (which cap at their max).
+  if (typeof data.speed === "number") state.speed = clamp(data.speed, 0.3, 3);
+  if (typeof data.baseSize === "number") state.baseSize = clamp(data.baseSize, 10, 60);
+  if (typeof data.autoSec === "number") state.autoSec = clamp(data.autoSec, 0, 60);
   if (typeof data.blink === "boolean") state.blink = data.blink;
   if (data.light) document.documentElement.classList.add("light");
   if (typeof data.panelX === "number" && typeof data.panelY === "number") {
@@ -634,12 +637,17 @@ panelHeader.addEventListener("pointerdown", (e) => {
 panelHeader.addEventListener("pointermove", (e) => {
   if (drag) positionPanel(e.clientX - drag.dx, e.clientY - drag.dy);
 });
-panelHeader.addEventListener("pointerup", (e) => {
+// Handles both a normal release and an interrupted gesture (pointercancel):
+// without the cancel path, `drag` would stay set and the capture would leak.
+function endDrag(e) {
   if (!drag) return;
   drag = null;
-  panelHeader.releasePointerCapture(e.pointerId);
+  // On pointercancel the pointer is already gone, so releasing can throw; ignore.
+  try { panelHeader.releasePointerCapture(e.pointerId); } catch (err) {}
   saveSettings();
-});
+}
+panelHeader.addEventListener("pointerup", endDrag);
+panelHeader.addEventListener("pointercancel", endDrag);
 
 // Hide button
 el("hideBtn").onclick = () => { panel.classList.add("hidden"); tip.classList.add("hidden"); };
