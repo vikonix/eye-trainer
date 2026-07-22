@@ -329,6 +329,16 @@ const canvas = document.getElementById("c");
 const g = canvas.getContext("2d");
 let W = 0, H = 0, DPR = 1;
 
+// Cached theme colors: reading getComputedStyle every frame forces a style
+// recalc 60x/s, so we resolve the CSS variables once and refresh on theme change.
+const colors = { dot: "", glow: "", bg: "" };
+function refreshColors() {
+  const style = getComputedStyle(document.documentElement);
+  colors.dot = style.getPropertyValue("--dot").trim();
+  colors.glow = style.getPropertyValue("--dot-glow").trim();
+  colors.bg = style.getPropertyValue("--bg").trim();
+}
+
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   W = window.innerWidth;
@@ -412,6 +422,7 @@ function loadSettings() {
 
 function toggleTheme() {
   document.documentElement.classList.toggle("light");
+  refreshColors();
   saveSettings();
 }
 
@@ -497,11 +508,20 @@ function frame(ts) {
 
   const raw = mode.fn(state.phase, state.ctx);
 
-  // Smooth toward target (eases saccade jumps and every transition)
-  const ease = raw.snap ? 0.28 : 1;
-  state.curX += (raw.x - state.curX) * ease;
-  state.curY += (raw.y - state.curY) * ease;
-  state.curScale += (raw.scale - state.curScale) * (raw.snap ? 0.28 : 0.12);
+  // Only the discrete saccade jumps need easing; continuous paths are already
+  // smooth, so we set them directly to avoid amplitude loss and lag (e.g. Zoom).
+  if (raw.snap) {
+    // Frame-rate independent easing: a 0.28 factor tuned for 60 fps is remapped
+    // through dt so the feel is identical on 60 Hz and 120 Hz displays.
+    const k = 1 - Math.pow(1 - 0.28, dt * 60);
+    state.curX += (raw.x - state.curX) * k;
+    state.curY += (raw.y - state.curY) * k;
+    state.curScale += (raw.scale - state.curScale) * k;
+  } else {
+    state.curX = raw.x;
+    state.curY = raw.y;
+    state.curScale = raw.scale;
+  }
 
   draw(state.curX, state.curY, state.curScale);
   requestAnimationFrame(frame);
@@ -515,13 +535,9 @@ function draw(nx, ny, scale) {
   const y = margin + ny * (H - margin * 2);
   const r = state.baseSize * scale;
 
-  const style = getComputedStyle(document.documentElement);
-  const dot = style.getPropertyValue("--dot").trim();
-  const glow = style.getPropertyValue("--dot-glow").trim();
-
   // Glow
   const grad = g.createRadialGradient(x, y, 0, x, y, r * 2.6);
-  grad.addColorStop(0, glow);
+  grad.addColorStop(0, colors.glow);
   grad.addColorStop(1, "transparent");
   g.fillStyle = grad;
   g.beginPath();
@@ -529,13 +545,13 @@ function draw(nx, ny, scale) {
   g.fill();
 
   // Core dot
-  g.fillStyle = dot;
+  g.fillStyle = colors.dot;
   g.beginPath();
   g.arc(x, y, r, 0, TAU);
   g.fill();
 
   // Tiny fixation center to aid focus
-  g.fillStyle = style.getPropertyValue("--bg").trim();
+  g.fillStyle = colors.bg;
   g.beginPath();
   g.arc(x, y, Math.max(1.5, r * 0.14), 0, TAU);
   g.fill();
@@ -590,7 +606,16 @@ canvas.addEventListener("click", () => {
 // Double-click anywhere to toggle fullscreen
 canvas.addEventListener("dblclick", toggleFullscreen);
 
+// Keep the panel inside the viewport when the window is resized. Registered here
+// (not inside resize()) because `panel` is defined after the initial resize call.
+window.addEventListener("resize", () => {
+  if (panel.style.left) {
+    positionPanel(parseFloat(panel.style.left), parseFloat(panel.style.top));
+  }
+});
+
 loadSettings();
+refreshColors(); // after loadSettings, which may have applied the light theme
 refreshUI();
 requestAnimationFrame(frame);
 </script>
