@@ -255,13 +255,13 @@ const MODES = [
   {
     key: "Circle CW",
     // Clockwise on screen: right -> bottom -> left -> top
-    fn: (p) => ({ x: 0.5 + 0.44 * Math.cos(p * TAU), y: 0.5 + 0.44 * Math.sin(p * TAU), scale: 1 }),
+    fn: (p) => ({ x: 0.5 + 0.5 * Math.cos(p * TAU), y: 0.5 + 0.5 * Math.sin(p * TAU), scale: 1 }),
     period: 9,
   },
   {
     key: "Circle CCW",
     // Counter-clockwise: reverse the vertical component
-    fn: (p) => ({ x: 0.5 + 0.44 * Math.cos(p * TAU), y: 0.5 - 0.44 * Math.sin(p * TAU), scale: 1 }),
+    fn: (p) => ({ x: 0.5 + 0.5 * Math.cos(p * TAU), y: 0.5 - 0.5 * Math.sin(p * TAU), scale: 1 }),
     period: 9,
   },
   {
@@ -510,7 +510,7 @@ function frame(ts) {
 function draw(nx, ny, scale) {
   g.clearRect(0, 0, W, H);
 
-  const margin = state.baseSize * 2.2;
+  const margin = state.baseSize; // one radius: the dot reaches the edge without clipping
   const x = margin + nx * (W - margin * 2);
   const y = margin + ny * (H - margin * 2);
   const r = state.baseSize * scale;
