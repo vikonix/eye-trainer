@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Eye Trainer</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --dot: #ffd45e;
+    --dot-glow: rgba(255, 212, 94, 0.35);
+    --ui: rgba(255, 255, 255, 0.75);
+    --ui-bg: rgba(20, 24, 32, 0.85);
+    --ui-border: rgba(255, 255, 255, 0.12);
+    --accent: #ffd45e;
+  }
+  html.light {
+    --bg: #f2f0e9;
+    --dot: #2c2f38;
+    --dot-glow: rgba(44, 47, 56, 0.25);
+    --ui: rgba(20, 20, 20, 0.8);
+    --ui-bg: rgba(255, 255, 255, 0.85);
+    --ui-border: rgba(0, 0, 0, 0.12);
+    --accent: #c98a12;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    transition: background 0.4s ease;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
+  }
+  canvas { display: block; position: fixed; inset: 0; }
+
+  /* Panel */
+  .panel {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    background: var(--ui-bg);
+    border: 1px solid var(--ui-border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    color: var(--ui);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    width: 260px;
+    font-size: 13px;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    z-index: 10;
+  }
+  .panel.hidden { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+  .panel h1 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel h1 .mode-name { color: var(--accent); }
+  .row { margin-bottom: 12px; }
+  .row:last-child { margin-bottom: 0; }
+  .row label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    opacity: 0.85;
+  }
+  .row label span:last-child { color: var(--accent); font-variant-numeric: tabular-nums; }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .modes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .modes button {
+    flex: 1 1 auto;
+    background: transparent;
+    border: 1px solid var(--ui-border);
+    color: var(--ui);
+    border-radius: 8px;
+    padding: 6px 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .modes button:hover { border-color: var(--accent); }
+  .modes button.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .toggles { display: flex; gap: 8px; }
+  .toggles button {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--ui-border);
+    color: var(--ui);
+    border-radius: 8px;
+    padding: 7px 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .toggles button.on { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  .toggles button:hover { border-color: var(--accent); }
+  .hint {
+    margin-top: 10px;
+    font-size: 10.5px;
+    line-height: 1.6;
+    opacity: 0.55;
+  }
+  .hint kbd {
+    background: var(--ui-border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: inherit;
+    font-size: 10px;
+  }
+  .tip {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--ui);
+    opacity: 0.4;
+    font-size: 12px;
+    z-index: 10;
+    transition: opacity 0.4s ease;
+  }
+  .tip.hidden { opacity: 0; }
+  .blink-flash {
+    position: fixed;
+    inset: 0;
+    background: var(--accent);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .blink-flash.show { animation: blinkPulse 1s ease; }
+  @keyframes blinkPulse {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.12; }
+  }
+  .blink-text {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--ui);
+    font-size: 22px;
+    font-weight: 600;
+    opacity: 0;
+    z-index: 6;
+    pointer-events: none;
+    letter-spacing: 1px;
+  }
+  .blink-text.show { animation: blinkText 1s ease; }
+  @keyframes blinkText {
+    0%, 100% { opacity: 0; }
+    30%, 70% { opacity: 0.8; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="blink-flash" id="flash"></div>
+<div class="blink-text" id="blinkText">Blink 👁</div>
+
+<div class="panel" id="panel">
+  <h1>Eye Trainer · <span class="mode-name" id="modeName">—</span></h1>
+
+  <div class="row">
+    <div class="modes" id="modes"></div>
+  </div>
+
+  <div class="row">
+    <label>Speed <span id="speedVal">1.0×</span></label>
+    <input type="range" id="speed" min="0.3" max="3" step="0.1" value="1">
+  </div>
+
+  <div class="row">
+    <label>Dot size <span id="sizeVal">26 px</span></label>
+    <input type="range" id="size" min="10" max="60" step="1" value="26">
+  </div>
+
+  <div class="row">
+    <label>Auto-switch mode <span id="autoVal">off</span></label>
+    <input type="range" id="auto" min="0" max="60" step="5" value="0">
+  </div>
+
+  <div class="row toggles">
+    <button id="playBtn" class="on">⏸ Pause</button>
+    <button id="themeBtn">🌙 Theme</button>
+    <button id="blinkBtn" class="on">👁 Blink</button>
+  </div>
+
+  <div class="hint">
+    <kbd>Space</kbd> pause · <kbd>←</kbd><kbd>→</kbd> mode · <kbd>↑</kbd><kbd>↓</kbd> speed<br>
+    <kbd>T</kbd> theme · <kbd>A</kbd> auto-switch · <kbd>H</kbd> hide panel · <kbd>F</kbd> fullscreen
+  </div>
+</div>
+
+<div class="tip" id="tip">Press <b>H</b> to hide the panel · <b>F</b> for fullscreen</div>
+
+<script>
+"use strict";
+
+// ---- Modes: each returns normalized position {x, y in 0..1, scale} for phase p in 0..1 ----
+const TAU = Math.PI * 2;
+const MODES = [
+  {
+    key: "Horizontal",
+    // Left-right sweep with ease at the edges
+    fn: (p) => ({ x: 0.5 + 0.5 * Math.sin(p * TAU), y: 0.5, scale: 1 }),
+    period: 8, // seconds for a full cycle at speed 1
+  },
+  {
+    key: "Vertical",
+    fn: (p) => ({ x: 0.5, y: 0.5 + 0.5 * Math.sin(p * TAU), scale: 1 }),
+    period: 8,
+  },
+  {
+    key: "Diagonals",
+    // Bounces along the two diagonals alternately
+    fn: (p) => {
+      const s = Math.sin(p * TAU);
+      const half = p < 0.5;
+      return { x: 0.5 + 0.5 * s, y: 0.5 + 0.5 * (half ? s : -s), scale: 1 };
+    },
+    period: 10,
+  },
+  {
+    key: "Circle",
+    fn: (p) => ({ x: 0.5 + 0.44 * Math.cos(p * TAU), y: 0.5 + 0.44 * Math.sin(p * TAU), scale: 1 }),
+    period: 9,
+  },
+  {
+    key: "Figure-8",
+    // Lemniscate of Gerono: figure-eight (∞)
+    fn: (p) => {
+      const t = p * TAU;
+      return { x: 0.5 + 0.46 * Math.sin(t), y: 0.5 + 0.30 * Math.sin(t) * Math.cos(t), scale: 1 };
+    },
+    period: 11,
+  },
+  {
+    key: "Saccades",
+    // Jumps between random targets, holding still between jumps
+    fn: (p, ctx) => {
+      const steps = 6;               // targets per cycle
+      const idx = Math.floor(p * steps);
+      if (idx !== ctx.sacIdx) {
+        ctx.sacIdx = idx;
+        ctx.sacX = 0.1 + Math.random() * 0.8;
+        ctx.sacY = 0.15 + Math.random() * 0.7;
+      }
+      return { x: ctx.sacX, y: ctx.sacY, scale: 1, snap: true };
+    },
+    period: 12,
+  },
+  {
+    key: "Zoom",
+    // Accommodation: circle grows and shrinks in place
+    fn: (p) => {
+      const s = 0.5 - 0.5 * Math.cos(p * TAU); // 0..1..0
+      return { x: 0.5, y: 0.5, scale: 0.5 + s * 3.5 };
+    },
+    period: 9,
+  },
+];
+
+// ---- State ----
+const state = {
+  modeIdx: 0,
+  playing: true,
+  speed: 1,
+  baseSize: 26,
+  autoSec: 0,          // 0 = off
+  blink: true,
+  phase: 0,            // 0..1 within current mode
+  lastTs: null,
+  autoTimer: 0,        // seconds since last auto-switch
+  blinkTimer: 0,       // seconds since last blink reminder
+  ctx: {},             // scratch for modes (saccades)
+  // smoothed screen position for saccade easing
+  curX: 0.5, curY: 0.5, curScale: 1,
+};
+
+const canvas = document.getElementById("c");
+const g = canvas.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+// ---- UI wiring ----
+const modesEl = document.getElementById("modes");
+MODES.forEach((m, i) => {
+  const b = document.createElement("button");
+  b.textContent = m.key;
+  b.onclick = () => setMode(i);
+  modesEl.appendChild(b);
+});
+const modeBtns = () => Array.from(modesEl.children);
+
+const el = (id) => document.getElementById(id);
+const modeNameEl = el("modeName");
+const speedInput = el("speed"), speedVal = el("speedVal");
+const sizeInput = el("size"), sizeVal = el("sizeVal");
+const autoInput = el("auto"), autoVal = el("autoVal");
+const playBtn = el("playBtn"), themeBtn = el("themeBtn"), blinkBtn = el("blinkBtn");
+const panel = el("panel"), tip = el("tip");
+const flash = el("flash"), blinkText = el("blinkText");
+
+function refreshUI() {
+  modeNameEl.textContent = MODES[state.modeIdx].key;
+  modeBtns().forEach((b, i) => b.classList.toggle("active", i === state.modeIdx));
+  speedVal.textContent = state.speed.toFixed(1) + "×";
+  sizeVal.textContent = state.baseSize + " px";
+  autoVal.textContent = state.autoSec === 0 ? "off" : state.autoSec + " s";
+  playBtn.textContent = state.playing ? "⏸ Pause" : "▶ Play";
+  playBtn.classList.toggle("on", state.playing);
+  blinkBtn.classList.toggle("on", state.blink);
+}
+
+function setMode(i) {
+  state.modeIdx = (i + MODES.length) % MODES.length;
+  state.phase = 0;
+  state.autoTimer = 0;
+  state.ctx = {};
+  refreshUI();
+}
+
+speedInput.oninput = () => { state.speed = parseFloat(speedInput.value); refreshUI(); };
+sizeInput.oninput = () => { state.baseSize = parseInt(sizeInput.value); refreshUI(); };
+autoInput.oninput = () => { state.autoSec = parseInt(autoInput.value); state.autoTimer = 0; refreshUI(); };
+playBtn.onclick = () => { state.playing = !state.playing; refreshUI(); };
+themeBtn.onclick = () => document.documentElement.classList.toggle("light");
+blinkBtn.onclick = () => { state.blink = !state.blink; refreshUI(); };
+
+// ---- Keyboard ----
+window.addEventListener("keydown", (e) => {
+  switch (e.code) {
+    case "Space": e.preventDefault(); state.playing = !state.playing; refreshUI(); break;
+    case "ArrowRight": setMode(state.modeIdx + 1); break;
+    case "ArrowLeft": setMode(state.modeIdx - 1); break;
+    case "ArrowUp": e.preventDefault(); state.speed = Math.min(3, +(state.speed + 0.1).toFixed(1)); speedInput.value = state.speed; refreshUI(); break;
+    case "ArrowDown": e.preventDefault(); state.speed = Math.max(0.3, +(state.speed - 0.1).toFixed(1)); speedInput.value = state.speed; refreshUI(); break;
+    case "KeyT": document.documentElement.classList.toggle("light"); break;
+    case "KeyA":
+      // cycle auto: off -> 15 -> 30 -> off
+      state.autoSec = state.autoSec === 0 ? 15 : state.autoSec === 15 ? 30 : 0;
+      autoInput.value = state.autoSec; state.autoTimer = 0; refreshUI(); break;
+    case "KeyH": panel.classList.toggle("hidden"); tip.classList.add("hidden"); break;
+    case "KeyF": toggleFullscreen(); break;
+  }
+});
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } else {
+    document.exitFullscreen?.();
+  }
+}
+
+// Hide the tip after a while
+setTimeout(() => tip.classList.add("hidden"), 6000);
+
+// ---- Animation loop ----
+function frame(ts) {
+  if (state.lastTs === null) state.lastTs = ts;
+  let dt = (ts - state.lastTs) / 1000;
+  state.lastTs = ts;
+  if (dt > 0.1) dt = 0.1; // clamp after tab switch
+
+  const mode = MODES[state.modeIdx];
+
+  if (state.playing) {
+    state.phase = (state.phase + dt / (mode.period / state.speed)) % 1;
+
+    // Auto mode switch
+    if (state.autoSec > 0) {
+      state.autoTimer += dt;
+      if (state.autoTimer >= state.autoSec) setMode(state.modeIdx + 1);
+    }
+    // Blink reminder every ~20 s
+    if (state.blink) {
+      state.blinkTimer += dt;
+      if (state.blinkTimer >= 20) { state.blinkTimer = 0; triggerBlink(); }
+    }
+  }
+
+  const raw = mode.fn(state.phase, state.ctx);
+
+  // Smooth toward target (eases saccade jumps and every transition)
+  const ease = raw.snap ? 0.28 : 1;
+  state.curX += (raw.x - state.curX) * ease;
+  state.curY += (raw.y - state.curY) * ease;
+  state.curScale += (raw.scale - state.curScale) * (raw.snap ? 0.28 : 0.12);
+
+  draw(state.curX, state.curY, state.curScale);
+  requestAnimationFrame(frame);
+}
+
+function draw(nx, ny, scale) {
+  g.clearRect(0, 0, W, H);
+
+  const margin = state.baseSize * 2.2;
+  const x = margin + nx * (W - margin * 2);
+  const y = margin + ny * (H - margin * 2);
+  const r = state.baseSize * scale;
+
+  const style = getComputedStyle(document.documentElement);
+  const dot = style.getPropertyValue("--dot").trim();
+  const glow = style.getPropertyValue("--dot-glow").trim();
+
+  // Glow
+  const grad = g.createRadialGradient(x, y, 0, x, y, r * 2.6);
+  grad.addColorStop(0, glow);
+  grad.addColorStop(1, "transparent");
+  g.fillStyle = grad;
+  g.beginPath();
+  g.arc(x, y, r * 2.6, 0, TAU);
+  g.fill();
+
+  // Core dot
+  g.fillStyle = dot;
+  g.beginPath();
+  g.arc(x, y, r, 0, TAU);
+  g.fill();
+
+  // Tiny fixation center to aid focus
+  g.fillStyle = style.getPropertyValue("--bg").trim();
+  g.beginPath();
+  g.arc(x, y, Math.max(1.5, r * 0.14), 0, TAU);
+  g.fill();
+}
+
+function triggerBlink() {
+  flash.classList.remove("show");
+  blinkText.classList.remove("show");
+  // reflow to restart animation
+  void flash.offsetWidth;
+  flash.classList.add("show");
+  blinkText.classList.add("show");
+}
+
+// Tap anywhere to toggle panel (useful on touch/fullscreen)
+canvas.addEventListener("click", () => {
+  panel.classList.toggle("hidden");
+  tip.classList.add("hidden");
+});
+
+refreshUI();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
