@@ -60,6 +60,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    cursor: move;
+    touch-action: none;
   }
   .panel h1 .mode-name { color: var(--accent); }
   .row { margin-bottom: 12px; }
@@ -109,6 +111,19 @@
   }
   .toggles button.on { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
   .toggles button:hover { border-color: var(--accent); }
+  .hide-btn {
+    width: 100%;
+    margin-top: 12px;
+    background: transparent;
+    border: 1px solid var(--ui-border);
+    color: var(--ui);
+    border-radius: 8px;
+    padding: 7px 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .hide-btn:hover { border-color: var(--accent); }
   .hint {
     margin-top: 10px;
     font-size: 10.5px;
@@ -202,8 +217,11 @@
 
   <div class="hint">
     <kbd>Space</kbd> pause · <kbd>←</kbd><kbd>→</kbd> mode · <kbd>↑</kbd><kbd>↓</kbd> speed<br>
-    <kbd>T</kbd> theme · <kbd>A</kbd> auto-switch · <kbd>H</kbd> hide panel · <kbd>F</kbd> fullscreen
+    <kbd>T</kbd> theme · <kbd>A</kbd> auto-switch · <kbd>H</kbd> hide panel · <kbd>F</kbd> fullscreen<br>
+    Drag the title bar to move this panel
   </div>
+
+  <button id="hideBtn" class="hide-btn">✕ Hide panel</button>
 </div>
 
 <div class="tip" id="tip">Press <b>H</b> to hide the panel · <b>F</b> for fullscreen</div>
@@ -340,6 +358,8 @@ function saveSettings() {
     autoSec: state.autoSec,
     blink: state.blink,
     light: document.documentElement.classList.contains("light"),
+    panelX: parseFloat(panel.style.left),
+    panelY: parseFloat(panel.style.top),
   };
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
@@ -365,6 +385,9 @@ function loadSettings() {
   if (typeof data.autoSec === "number") state.autoSec = data.autoSec;
   if (typeof data.blink === "boolean") state.blink = data.blink;
   if (data.light) document.documentElement.classList.add("light");
+  if (typeof data.panelX === "number" && typeof data.panelY === "number") {
+    positionPanel(data.panelX, data.panelY);
+  }
 
   // Reflect restored values in the input controls
   speedInput.value = state.speed;
@@ -511,6 +534,37 @@ function triggerBlink() {
   flash.classList.add("show");
   blinkText.classList.add("show");
 }
+
+// ---- Draggable panel (drag by the title bar) ----
+const panelHeader = panel.querySelector("h1");
+let drag = null;
+
+// Clamp the panel inside the viewport, then apply the position
+function positionPanel(x, y) {
+  const maxX = window.innerWidth - panel.offsetWidth;
+  const maxY = window.innerHeight - panel.offsetHeight;
+  panel.style.left = Math.max(0, Math.min(x, maxX)) + "px";
+  panel.style.top = Math.max(0, Math.min(y, maxY)) + "px";
+}
+
+panelHeader.addEventListener("pointerdown", (e) => {
+  const rect = panel.getBoundingClientRect();
+  drag = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+  panelHeader.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+panelHeader.addEventListener("pointermove", (e) => {
+  if (drag) positionPanel(e.clientX - drag.dx, e.clientY - drag.dy);
+});
+panelHeader.addEventListener("pointerup", (e) => {
+  if (!drag) return;
+  drag = null;
+  panelHeader.releasePointerCapture(e.pointerId);
+  saveSettings();
+});
+
+// Hide button
+el("hideBtn").onclick = () => { panel.classList.add("hidden"); tip.classList.add("hidden"); };
 
 // Tap anywhere to toggle panel (useful on touch/fullscreen)
 canvas.addEventListener("click", () => {
