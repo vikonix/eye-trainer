@@ -245,25 +245,40 @@ const MODES = [
   },
   {
     key: "Diagonals",
-    // Bounces along the two diagonals alternately
+    // Two diagonals from the bottom corners, meeting at the top-center
     fn: (p) => {
       const s = Math.sin(p * TAU);
-      const half = p < 0.5;
-      return { x: 0.5 + 0.5 * s, y: 0.5 + 0.5 * (half ? s : -s), scale: 1 };
+      return { x: 0.5 + 0.5 * s, y: Math.abs(s), scale: 1 };
     },
     period: 10,
   },
   {
-    key: "Circle",
+    key: "Circle CW",
+    // Clockwise on screen: right -> bottom -> left -> top
     fn: (p) => ({ x: 0.5 + 0.44 * Math.cos(p * TAU), y: 0.5 + 0.44 * Math.sin(p * TAU), scale: 1 }),
     period: 9,
   },
   {
-    key: "Figure-8",
-    // Lemniscate of Gerono: figure-eight (∞)
+    key: "Circle CCW",
+    // Counter-clockwise: reverse the vertical component
+    fn: (p) => ({ x: 0.5 + 0.44 * Math.cos(p * TAU), y: 0.5 - 0.44 * Math.sin(p * TAU), scale: 1 }),
+    period: 9,
+  },
+  {
+    key: "Figure-8 H",
+    // Horizontal lemniscate of Gerono: figure-eight (∞)
     fn: (p) => {
       const t = p * TAU;
       return { x: 0.5 + 0.46 * Math.sin(t), y: 0.5 + 0.30 * Math.sin(t) * Math.cos(t), scale: 1 };
+    },
+    period: 11,
+  },
+  {
+    key: "Figure-8 V",
+    // Vertical figure-eight: axes swapped so the loops stack vertically (8)
+    fn: (p) => {
+      const t = p * TAU;
+      return { x: 0.5 + 0.30 * Math.sin(t) * Math.cos(t), y: 0.5 + 0.46 * Math.sin(t), scale: 1 };
     },
     period: 11,
   },
