@@ -328,6 +328,55 @@ const playBtn = el("playBtn"), themeBtn = el("themeBtn"), blinkBtn = el("blinkBt
 const panel = el("panel"), tip = el("tip");
 const flash = el("flash"), blinkText = el("blinkText");
 
+// ---- Settings persistence (localStorage) ----
+const SETTINGS_KEY = "eye-trainer-settings";
+
+function saveSettings() {
+  // Persist only user-configurable settings, not transient runtime state
+  const data = {
+    modeIdx: state.modeIdx,
+    speed: state.speed,
+    baseSize: state.baseSize,
+    autoSec: state.autoSec,
+    blink: state.blink,
+    light: document.documentElement.classList.contains("light"),
+  };
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
+  } catch (e) {
+    // Storage may be unavailable (private mode, disabled); ignore silently
+  }
+}
+
+function loadSettings() {
+  let data;
+  try {
+    data = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
+  } catch (e) {
+    data = null;
+  }
+  if (!data) return;
+
+  if (Number.isInteger(data.modeIdx) && data.modeIdx >= 0 && data.modeIdx < MODES.length) {
+    state.modeIdx = data.modeIdx;
+  }
+  if (typeof data.speed === "number") state.speed = data.speed;
+  if (typeof data.baseSize === "number") state.baseSize = data.baseSize;
+  if (typeof data.autoSec === "number") state.autoSec = data.autoSec;
+  if (typeof data.blink === "boolean") state.blink = data.blink;
+  if (data.light) document.documentElement.classList.add("light");
+
+  // Reflect restored values in the input controls
+  speedInput.value = state.speed;
+  sizeInput.value = state.baseSize;
+  autoInput.value = state.autoSec;
+}
+
+function toggleTheme() {
+  document.documentElement.classList.toggle("light");
+  saveSettings();
+}
+
 function refreshUI() {
   modeNameEl.textContent = MODES[state.modeIdx].key;
   modeBtns().forEach((b, i) => b.classList.toggle("active", i === state.modeIdx));
@@ -337,6 +386,7 @@ function refreshUI() {
   playBtn.textContent = state.playing ? "⏸ Pause" : "▶ Play";
   playBtn.classList.toggle("on", state.playing);
   blinkBtn.classList.toggle("on", state.blink);
+  saveSettings();
 }
 
 function setMode(i) {
@@ -351,7 +401,7 @@ speedInput.oninput = () => { state.speed = parseFloat(speedInput.value); refresh
 sizeInput.oninput = () => { state.baseSize = parseInt(sizeInput.value); refreshUI(); };
 autoInput.oninput = () => { state.autoSec = parseInt(autoInput.value); state.autoTimer = 0; refreshUI(); };
 playBtn.onclick = () => { state.playing = !state.playing; refreshUI(); };
-themeBtn.onclick = () => document.documentElement.classList.toggle("light");
+themeBtn.onclick = toggleTheme;
 blinkBtn.onclick = () => { state.blink = !state.blink; refreshUI(); };
 
 // ---- Keyboard ----
@@ -362,7 +412,7 @@ window.addEventListener("keydown", (e) => {
     case "ArrowLeft": setMode(state.modeIdx - 1); break;
     case "ArrowUp": e.preventDefault(); state.speed = Math.min(3, +(state.speed + 0.1).toFixed(1)); speedInput.value = state.speed; refreshUI(); break;
     case "ArrowDown": e.preventDefault(); state.speed = Math.max(0.3, +(state.speed - 0.1).toFixed(1)); speedInput.value = state.speed; refreshUI(); break;
-    case "KeyT": document.documentElement.classList.toggle("light"); break;
+    case "KeyT": toggleTheme(); break;
     case "KeyA":
       // cycle auto: off -> 15 -> 30 -> off
       state.autoSec = state.autoSec === 0 ? 15 : state.autoSec === 15 ? 30 : 0;
@@ -468,6 +518,10 @@ canvas.addEventListener("click", () => {
   tip.classList.add("hidden");
 });
 
+// Double-click anywhere to toggle fullscreen
+canvas.addEventListener("dblclick", toggleFullscreen);
+
+loadSettings();
 refreshUI();
 requestAnimationFrame(frame);
 </script>
